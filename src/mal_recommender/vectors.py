@@ -90,6 +90,7 @@ def _load_model():
 
 def _rows_needing_vectors(conn, limit: int | None = None) -> list[Any]:
     settings = get_settings()
+    prompt_version = getattr(settings, "prompt_version", "traits-v1")
     sql = """
         SELECT
           i.id,
@@ -101,13 +102,13 @@ def _rows_needing_vectors(conn, limit: int | None = None) -> list[Any]:
           i.payload_json,
           t.traits_json
         FROM canonical_items i
-        JOIN item_traits t ON t.canonical_item_id = i.id
+        JOIN item_traits t ON t.canonical_item_id = i.id AND t.prompt_version = ?
         LEFT JOIN item_vectors v
           ON v.canonical_item_id = i.id AND v.model_name = ?
         WHERE v.canonical_item_id IS NULL OR v.input_hash != ?
         ORDER BY i.id
     """
-    rows = conn.execute(sql, (settings.embedding_model, "__pending__")).fetchall()
+    rows = conn.execute(sql, (prompt_version, settings.embedding_model, "__pending__")).fetchall()
     pending = []
     for row in rows:
         text = embedding_text(dict(row), db.loads(row["traits_json"], {}))

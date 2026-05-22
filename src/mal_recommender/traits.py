@@ -33,11 +33,30 @@ def heuristic_traits(item: dict[str, Any]) -> TraitLabel:
     genres = [genre.get("name", "") for genre in item.get("genres", [])]
     synopsis = (item.get("synopsis") or "").lower()
     moods = sorted({MOOD_BY_GENRE[g] for g in genres if g in MOOD_BY_GENRE})
+    tense_terms = [
+        "psychological",
+        "mystery",
+        "suspense",
+        "crime",
+        "detective",
+        "conspiracy",
+        "mind game",
+        "serial killer",
+        "murder",
+    ]
+    cozy_terms = ["slice of life", "daily life", "relax", "heartwarming", "friendship", "school club"]
+    if any(term in synopsis for term in tense_terms):
+        moods.append("tense")
+    if any(term in synopsis for term in cozy_terms):
+        moods.append("cozy")
+    moods = sorted(set(moods))
     if not moods:
         moods = ["thoughtful"] if "life" in synopsis or "mystery" in synopsis else ["balanced"]
 
-    heavy_terms = ["death", "trauma", "war", "grief", "despair", "abuse", "murder", "suicide"]
+    heavy_terms = ["death", "trauma", "war", "grief", "despair", "abuse", "murder", "suicide", "serial killer"]
     depth = "heavy" if any(term in synopsis for term in heavy_terms) else "moderate"
+    if any(term in synopsis for term in tense_terms) or any(g in genres for g in ["Psychological", "Suspense"]):
+        depth = "heavy"
     if any(g in genres for g in ["Comedy", "Slice of Life", "Iyashikei"]):
         depth = "shallow" if depth != "heavy" else "moderate"
 

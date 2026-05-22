@@ -410,6 +410,19 @@ async def ingest_anilist(content_type: str, limit: int = 100, client: AniListCli
                         canonical_item_id = upsert_canonical_item(
                             conn, "anilist", content_type, media["id"], node, source_record_id
                         )
+                    if node.get("idMal"):
+                        conn.execute(
+                            """
+                            INSERT INTO item_source_links (
+                              canonical_item_id, source, content_type, source_item_id, source_record_id
+                            )
+                            VALUES (?, 'mal', ?, ?, NULL)
+                            ON CONFLICT(source, content_type, source_item_id) DO UPDATE SET
+                              canonical_item_id = excluded.canonical_item_id,
+                              updated_at = CURRENT_TIMESTAMP
+                            """,
+                            (canonical_item_id, content_type, str(node["idMal"])),
+                        )
                     conn.execute(
                         """
                         INSERT INTO item_source_links (
@@ -452,6 +465,19 @@ async def ingest_anilist(content_type: str, limit: int = 100, client: AniListCli
                                 related_media["id"],
                                 related_node,
                                 related_record_id,
+                            )
+                        if related_node.get("idMal"):
+                            conn.execute(
+                                """
+                                INSERT INTO item_source_links (
+                                  canonical_item_id, source, content_type, source_item_id, source_record_id
+                                )
+                                VALUES (?, 'mal', ?, ?, NULL)
+                                ON CONFLICT(source, content_type, source_item_id) DO UPDATE SET
+                                  canonical_item_id = excluded.canonical_item_id,
+                                  updated_at = CURRENT_TIMESTAMP
+                                """,
+                                (related_item_id, related_content_type, str(related_node["idMal"])),
                             )
                         conn.execute(
                             """

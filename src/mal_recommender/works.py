@@ -11,7 +11,7 @@ from . import db
 
 SAME_WORK_RELATIONS = {"prequel", "sequel", "parent", "side_story", "summary"}
 EXTRA_RELATIONS = {"side_story", "summary"}
-SUPPRESSED_ROLES = {"recap", "special", "ova"}
+SUPPRESSED_ROLES = {"recap", "special", "ova", "spinoff", "alternative", "movie_extra"}
 
 
 @dataclass
@@ -39,26 +39,26 @@ def _role_for_item(item: dict[str, Any], relation_types: set[str]) -> str:
     title = (item.get("title") or "").lower()
     if "summary" in relation_types or "recap" in title:
         return "recap"
-    if "missing pieces" in title:
+    if "missing pieces" in title or "picture drama" in title:
         return "special"
+    if relation_types & {"alternative"}:
+        return "alternative"
+    if relation_types & {"spin_off", "character"}:
+        return "spinoff"
     if media_type == "ova":
         return "ova"
     if media_type == "special":
         return "special"
-    if re.search(r"\b(cm|pv|trailer|special|ova)\b", title):
+    if relation_types & EXTRA_RELATIONS:
+        return "movie_extra" if media_type == "movie" else "special"
+    if re.search(r"\b(cm|pv|trailer|special|ova|petit|mini|chibi)\b", title):
         return "special"
     if media_type == "movie" and "the movie" in title:
         return "movie_extra"
     if re.search(r"\b(season\s*[2-9]|[2-9](nd|rd|th)\s+season|ii|iii|iv|v|too!?|[2-9])\b$", title):
         return "sequel"
-    if media_type == "movie" and relation_types & EXTRA_RELATIONS:
-        return "movie_extra"
     if media_type in {"tv", "tv_short"}:
         return "main"
-    if relation_types & {"alternative"}:
-        return "alternative"
-    if relation_types & {"spin_off", "character"}:
-        return "spinoff"
     return "main"
 
 
@@ -118,10 +118,16 @@ def build_works(content_type: str = "anime", path: Path | None = None) -> WorkBu
 
         uf = UnionFind(list(item_by_id))
         relation_types_by_item: dict[int, set[str]] = defaultdict(set)
+        role_relation_types_by_item: dict[int, set[str]] = defaultdict(set)
         for relation in relation_rows:
             relation_type = relation["relation_type"]
             relation_types_by_item[relation["from_item_id"]].add(relation_type)
             relation_types_by_item[relation["to_item_id"]].add(relation_type)
+            if relation_type in EXTRA_RELATIONS or relation_type in {"alternative", "spin_off", "character"}:
+                role_relation_types_by_item[relation["to_item_id"]].add(relation_type)
+            else:
+                role_relation_types_by_item[relation["from_item_id"]].add(relation_type)
+                role_relation_types_by_item[relation["to_item_id"]].add(relation_type)
             if relation_type in SAME_WORK_RELATIONS:
                 uf.union(relation["from_item_id"], relation["to_item_id"])
 
@@ -154,7 +160,7 @@ def build_works(content_type: str = "anime", path: Path | None = None) -> WorkBu
                 item
                 for item in ordered
                 if not _is_extra_format(item.get("media_type"))
-                and _role_for_item(item, relation_types_by_item[item["id"]]) not in SUPPRESSED_ROLES
+                and _role_for_item(item, role_relation_types_by_item[item["id"]]) not in SUPPRESSED_ROLES
             ]
             entrypoint = entry_candidates[0] if entry_candidates else ordered[0]
             title = entrypoint["title"]
@@ -179,7 +185,7 @@ def build_works(content_type: str = "anime", path: Path | None = None) -> WorkBu
             works += 1
             for idx, item in enumerate(ordered):
                 relation_types = sorted(relation_types_by_item[item["id"]])
-                role = _role_for_item(item, set(relation_types))
+                role = _role_for_item(item, role_relation_types_by_item[item["id"]])
                 conn.execute(
                     """
                     INSERT INTO item_work_links (
