@@ -19,18 +19,19 @@ def get_item(content_type: str, mal_id: int):
     with db.session() as conn:
         row = conn.execute(
             """
-            SELECT i.*, t.traits_json
-            FROM mal_items i
-            LEFT JOIN item_traits t ON t.content_type = i.content_type AND t.mal_id = i.mal_id
-            WHERE i.content_type = ? AND i.mal_id = ?
+            SELECT i.*, mal.source_item_id AS mal_id, t.traits_json
+            FROM item_source_links mal
+            JOIN canonical_items i ON i.id = mal.canonical_item_id
+            LEFT JOIN item_traits t ON t.canonical_item_id = i.id
+            WHERE mal.source = 'mal' AND mal.content_type = ? AND mal.source_item_id = ?
             """,
-            (content_type, mal_id),
+            (content_type, str(mal_id)),
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return {
         "content_type": row["content_type"],
-        "mal_id": row["mal_id"],
+        "mal_id": int(row["mal_id"]),
         "title": row["title"],
         "payload": db.loads(row["payload_json"], {}),
         "traits": db.loads(row["traits_json"], None),

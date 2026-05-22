@@ -55,6 +55,8 @@ def heuristic_traits(item: dict[str, Any]) -> TraitLabel:
         pacing = "slow"
 
     emotional = "high" if depth == "heavy" else "low" if depth == "shallow" else "moderate"
+    mental_effort = "high" if depth == "heavy" else "low" if depth == "shallow" else "medium"
+    comfort = "high" if depth == "shallow" and "cozy" in moods else "low" if depth == "heavy" else "medium"
     cooldown = "high" if depth == "shallow" and emotional != "high" else "low" if depth == "heavy" else "medium"
     bingeability = "high" if commitment in {"low", "medium"} and filler_risk != "high" else "medium"
 
@@ -63,6 +65,8 @@ def heuristic_traits(item: dict[str, Any]) -> TraitLabel:
         depth=depth,
         pacing=pacing,
         emotional_load=emotional,
+        mental_effort=mental_effort,
+        comfort_level=comfort,
         commitment_cost=commitment,
         filler_risk=filler_risk,
         bingeability=bingeability,
@@ -98,7 +102,7 @@ async def llm_traits(item: dict[str, Any]) -> TraitLabel | None:
         input=[
             {
                 "role": "system",
-                "content": "Return compact JSON matching this schema: moods array, depth, pacing, emotional_load, commitment_cost, filler_risk, bingeability, cooldown_fit, tags array, confidence number, rationale string.",
+                "content": "Return compact JSON matching this schema: moods array, depth, pacing, emotional_load, mental_effort, comfort_level, commitment_cost, filler_risk, bingeability, cooldown_fit, tags array, confidence number, rationale string.",
             },
             {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
         ],
@@ -113,12 +117,11 @@ async def label_missing(limit: int = 200, use_llm: bool = True) -> int:
     with db.session() as conn:
         rows = conn.execute(
             """
-            SELECT content_type, mal_id, payload_json
-            FROM mal_items
+            SELECT id, content_type, payload_json
+            FROM canonical_items
             WHERE NOT EXISTS (
               SELECT 1 FROM item_traits
-              WHERE item_traits.content_type = mal_items.content_type
-                AND item_traits.mal_id = mal_items.mal_id
+              WHERE item_traits.canonical_item_id = canonical_items.id
                 AND item_traits.prompt_version = ?
             )
             LIMIT ?
@@ -135,15 +138,19 @@ async def label_missing(limit: int = 200, use_llm: bool = True) -> int:
                 model_name = settings.openai_model
             conn.execute(
                 """
-                INSERT OR REPLACE INTO item_traits (
-                  content_type, mal_id, prompt_version, model_name, source_hash,
+                INSERT INTO item_traits (
+                  canonical_item_id, prompt_version, model_name, source_hash,
                   traits_json, confidence
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(canonical_item_id, prompt_version) DO UPDATE SET
+                  model_name = excluded.model_name,
+                  source_hash = excluded.source_hash,
+                  traits_json = excluded.traits_json,
+                  confidence = excluded.confidence
                 """,
                 (
-                    row["content_type"],
-                    row["mal_id"],
+                    row["id"],
                     settings.prompt_version,
                     model_name,
                     source_hash(item),

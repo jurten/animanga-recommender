@@ -23,6 +23,8 @@ class TraitLabel(BaseModel):
     depth: str = "moderate"
     pacing: str = "balanced"
     emotional_load: str = "moderate"
+    mental_effort: str = "medium"
+    comfort_level: str = "medium"
     commitment_cost: str = "medium"
     filler_risk: str = "medium"
     bingeability: str = "medium"
@@ -49,6 +51,10 @@ class RecommendationResult(BaseModel):
     score: float
     reasons: list[str]
     traits: dict[str, Any] = Field(default_factory=dict)
+    canonical_work_id: int | None = None
+    work_title: str | None = None
+    canonical_item_id: int | None = None
+    release_role: str | None = None
 
 
 class FeedbackRequest(BaseModel):

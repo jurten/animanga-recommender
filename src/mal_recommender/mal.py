@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import secrets
 import urllib.parse
@@ -78,8 +76,9 @@ MANGA_FIELDS = ",".join(
 
 def make_pkce_pair() -> tuple[str, str]:
     verifier = secrets.token_urlsafe(96)[:128]
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
-    return verifier, challenge
+    # MAL currently supports the plain PKCE method, so the challenge must match
+    # the verifier sent to the token endpoint.
+    return verifier, verifier
 
 
 class TokenStore:
@@ -119,9 +118,14 @@ class MALClient:
             "code_verifier": code_verifier,
             "redirect_uri": self.settings.mal_redirect_uri,
         }
+        if self.settings.mal_client_secret:
+            data["client_secret"] = self.settings.mal_client_secret
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(TOKEN_URL, data=data)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(f"MAL token exchange failed: {response.text}") from exc
         tokens = response.json()
         self.token_store.save(tokens)
         return tokens

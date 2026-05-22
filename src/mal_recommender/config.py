@@ -9,8 +9,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     mal_client_id: str = ""
+    mal_client_secret: str = ""
     mal_redirect_uri: str = "http://localhost:8765/callback"
     database_url: str = "sqlite:///./data/recommender.db"
+    embedding_model: str = "BAAI/bge-m3"
+    embedding_device: str = "cuda"
+    embedding_batch_size: int = 32
+    work_embedding_batch_size: int = 2
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
     prompt_version: str = "traits-v1"
